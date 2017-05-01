@@ -1,28 +1,25 @@
 ---
 title: "Text Analysis of The Lizzie Bennet Diaries"
 output:
-  html_notebook:
   md_document:
-    variant: markdown_github
-    fig_width: 7
     fig_height: 6
+    fig_width: 7
+    variant: markdown_github
+  html_notebook: null
+date: '`r Sys.Date()`'
 ---
 
 ![](http://www.pemberleydigital.com/wp-content/uploads/2012/04/LBD-FacebookCover-Emmy.png)
 [Image source](http://www.pemberleydigital.com/)
 
 # Inspiration
-Inspired by [Julia's Silge's](http://juliasilge.com/) recent talk on [Tidytext](http://tidytextmining.com/), and her blog posts, I decided to try my hand at some text analysis. Julia's example focus on the works of Jane Austen. As Jane Austen has been adapted so many time, I decided to "adapt" Julia's ideas for the modern works of Austen's book - specifically the Lizzie Bennet Diaries.
+Inspired by [Julia's Silge's](http://juliasilge.com/) recent talk on [Tidytext](http://tidytextmining.com/) as part of [NASA Datanauts](link), and her blog posts, I decided to try my hand at some text analysis. Julia's examples focus on the works of Jane Austen. As Jane Austen has been adapted so many time, I decided to "adapt" Julia's talk for the modern works of Austen's book - specifically the Lizzie Bennet Diaries.
 
 
 # The Lizzie Bennet Diaries
-The [Lizzie Bennet Diaries](http://www.pemberleydigital.com/the-lizzie-bennet-diaries/) (also known as the LBD) is a modern adaptation of Jane Austen's Pride and Prejudice for YouTube. The series, created by Hank Green (of Vlogbrothers, Scishow, and Crash course fame) and Bernie Su, tells the famous love story of Elizabeth Bennet and Mr. Darcy through vlogs. Altogether, the series filmed more than 100 video episodes with over 9.5 hours of video making it the longest adaaption of Pride and Prejudice to date. The first video premiered on April 9, 2012 which makes this year the **5th Anniversary** of the series! 
-
-
-The story is told through Lizzie's vlogs, with major events largely happening of screen. The initial main characters are Lizzie, her friend Charlotte and sisters Lydia and Jane. Together they use costume-theater to act out scenes involving other characters. (Lizzie's version of her mother is my personal favorite.) 
+The [Lizzie Bennet Diaries](http://www.pemberleydigital.com/the-lizzie-bennet-diaries/) is a modern adaptation of Jane Austen's Pride and Prejudice for YouTube. The story is told through a series of Vlogs by Lizzie Bennet as part of a school project. The series, created by Hank Green and Bernie Su, first aired on April 9, 2012, making this year the **5th Anniversary** of the series! Altogether, the series filmed more than 100 video episodes with over 9.5 hours of video making it the longest adaption of Pride and Prejudice to date. 
 
 Along with the main LBD channel, there are also some supporting channels. These allow others characters to tell parts of the story that Lizzie doesn't take part in. For example, Lydia's Vlogs include the story on how she meets George Wickham and their budding relationship. While not required viewing, these extra videos help round out the experience.
-
 
 Since the series ended, 2 books have come out from the creators and writers of the original videos: one that follows the videos but adds some more detail to Lizzie's life, and one that focuses on Lydia's story after the series ends. 
 
@@ -31,28 +28,35 @@ The Secret Diary of Lizzie Bennet, signed by most of the cast and writers
 
 In honor of LBD's 5th Anniversary, let's do some LBD text analysis! **Happy Anniversary LBD!**
 
+![celebration+lizzie+bennet](http://media3.giphy.com/media/10MjSRjJxjc6XK/giphy-downsized.gif)  
+<div style='font-size:50%'>([Source link](http://elizabethgillies.tumblr.com/post/44897897466))</div>  
 
-# Analysis!
-The first part of this analysis is grabbing all the text from YouTube. To access the API, I use the [`tuber`](https://soodoku.github.io/tuber/) package for R written by Gaurav Sood.  
 
+# Analysis
+## Gathering Data
+The first part of this analysis is grabbing all the text from YouTube. To access the API, I use the [`tuber`](https://soodoku.github.io/tuber/) package by Gaurav Sood.  
 
 ```{r, echo=T, eval=FALSE}
+library(tidyverse)
 library(tuber)
+
 yt_oauth("app_id", "app_password")
 ```
 
 ```{r, include=FALSE}
 library(tuber)
+library(tidyverse)
+
 yt_oauth("998136489867-5t3tq1g7hbovoj46dreqd6k5kd35ctjn.apps.googleusercontent.com", "MbOSt6cQhhFkwETXKur-L9rN")
 ```
 
-First I need the channel id to access the channel's playlist of videos. I don't know what the ID is off the top of my head, but luckily I can do a search for `lizziebennet` to find some videos that I know are part of the series.
+The fist step was to find the channel id to access the LBD playlist. I do a quick search for `lizziebennet` to find some videos that I know are part of the series.
 ```{r}
-yt_search("lizziebennet")[1:5, ] %>% 
-  select(chanelId, channelTitle) 
+search <- yt_search("lizziebennet")[1:5, ] 
+search %>% select(title, channelId)
 ```
 
-With the channel ID in hand, I now access the channel's resources to find the playlist ID, which I will use to access all the videos in that playlist. `list_channel_resources` for `tuber` creates a list of channel attributes and buried in that list in the playlist ID.
+With the channel ID in hand, I can now access the channel's resources to find the playlist ID, which I will use to access all the videos in that playlist. `list_channel_resources` for `tuber` creates a list of channel attributes and buried in that list in the playlist ID.
 ```{r}
 # Channel Information
 a <- list_channel_resources(filter = c(channel_id="UCXfbQAimgtbk4RAUHtIAUww"), part="contentDetails")
@@ -64,8 +68,6 @@ playlist_id <- a$items[[1]]$contentDetails$relatedPlaylists$uploads
 The YouTube API atomically pages videos so the max you get per page is 50. I know I need more than that, so I created a function that I can use recursively to get all the videos. (This code is not a simple way of doing what I need it to, but it works. I would love any comments on how to clean it up.)
 
 ```{r, message=FALSE}
-library(tidyverse)
-
 # Get videos on the playlist
 vids <- get_playlist_items(filter= c(playlist_id=playlist_id), max_results = 50) 
   vid_ids <- map(vids$items, "contentDetails") %>%
@@ -92,7 +94,7 @@ nrow(vid_info)
 ```
 
 
-Now that I have a list of video IDs, I can use `get_captions` to access the text of the videos. I also use `xmlTreeParse` and ``to covert the caption into into an easily accessible lines of text. I put the text, video ID, and video title in a tibble for use in tidydata.
+Now that I have a list of video IDs, I can use `get_captions` to access the text of the videos. I also use `xmlTreeParse` and `xmlToList` to covert the caption into into an easily accessible lines of text. I put the text, video ID, and video title in a tibble for use in tidydata.
 
 ```{r, message=FALSE}
 library(XML)
@@ -129,11 +131,11 @@ titles <- text %>%
 ```
 
 
-Boop
+One of the problems with using captions, is the messy text. I used a simple set of `gsub` to transform obvious punctuation marks into their English counterparts. I also pulled out the character SPEAKING the words from the text itself. I left this column alone in the dataset, but might one day go back and focus an analysis on speaking characters.
+
 ```{r, message=FALSE}
 library(tidytext)
 library(stringr)
-
 
 lizziebennet <- text %>%
   left_join(titles, by="title") %>%
@@ -149,12 +151,14 @@ lizziebennet <- text %>%
   arrange(ep.num, linenumber)
 ```
 
+
 ```{r, echo=F}
 custom_stop_words <- tibble(
   word = c("margaret", "dunlap", "bernie", "su", "taylor", "brogan", "rachel", "kiley", "kate", "rorick", "jay", "bushman", "alyson", "anne", "toole"), 
   lexicon = "custom")
 
-stop_words <- stop_words %>% bind_rows(custom_stop_words)
+stop_words <- stop_words %>% 
+  bind_rows(custom_stop_words)
 ```
 
 
@@ -175,18 +179,19 @@ lizziebennet %>%
   count(word, sort=TRUE) %>%
   top_n(10)
 ```
-I'm especailly amused by THE MOST AWKWARD DANCE EVER being in the top 10 5-grams.
+I'm especially amused by THE MOST AWKWARD DANCE EVER being in the top 10 5-grams.
 ```{r, echo=FALSE, message=FALSE}
 lizziebennet %>%
   tidytext::unnest_tokens(word, text, token="ngrams", n=5) %>%
   count(word, sort=TRUE) %>%
+  ungroup() %>%
   top_n(10)
 ```
 
 
 ## Sentiment Analysis
 
-I've choosen to use the Bing lexicon (because of Bing Lee, get it?). In Tidydata sentiment analysis is easy because you just join the dictionary against your tokenzied words. 
+I've chosen to use the Bing lexicon (because of Bing Lee, get it?). In Tidydata sentiment analysis is easy because you just join the dictionary against your tokenzied words. 
 
 ```{r, message=FALSE}
 bing <- sentiments %>%
@@ -209,7 +214,7 @@ lbsentiment <- lizziebennet %>%
          sentiment = sentiment / n)  
 ```
 
-Most postive sentiment episdoes
+Most positive sentiment episodes
 ```{r, echo=FALSE, message=FALSE}
 lbsentiment %>% 
   ungroup() %>%
@@ -218,7 +223,7 @@ lbsentiment %>%
   top_n(5)
 ```
 
-Most negative sentiment episdoes
+Most negative sentiment episodes
 ```{r echo=FALSE, message=FALSE}
 lbsentiment %>% 
   ungroup() %>%
@@ -226,17 +231,37 @@ lbsentiment %>%
   select(title, sentiment) %>%
   top_n(-5)
 ```
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+x <- lbsentiment %>%
+  ungroup() %>%
+  arrange(desc(sentiment)) %>%
+  select(index, sentiment) %>%
+  top_n(10)
+
+y <- lbsentiment %>%
+  ungroup() %>%
+  arrange(sentiment) %>%
+  select(index, sentiment) %>%
+  top_n(-10)
+
+
+plot_text <- bind_rows(x, y) %>%
+  select(index, sentiment) %>%
+  mutate(index2 = paste("Ep:", index),
+         sentiment = ifelse(sentiment >= 0, sentiment + .0045, sentiment - .0045)
+  )
+
+```
 
 
 ```{r, message=FALSE}
 library(viridis)
 theme_set(theme_bw()) # a theme with a white background
 
-#plotpoints <- tibble(ep.num = c(), text=c(""))
-
 ggplot(lbsentiment, aes(x=index, sentiment, fill=as.factor(index))) +
         geom_bar(stat = "identity", show.legend = FALSE) +
         theme_minimal(base_size = 13) +
+        geom_text(data=plot_text, aes(x=index, y=sentiment, label=index), size=3.5) + 
         labs(title = "Sentiment in Lizzie Bennet Diaries",
              y = "Sentiment"
              ) +
@@ -250,16 +275,10 @@ ggplot(lbsentiment, aes(x=index, sentiment, fill=as.factor(index))) +
 
 ```
 
-This plot is really fasinating to me! There's a lot to unpack.
-
-Julia's sentiment analysis of the orginal text is much more positive than the LBD analysis, with two negative portions relating to Darcy proposing to Elizabeth and Lydia running away with Wickham. I had expected a similar "Wickham" spike, and while that sections of episodes is surely "negative" it's not more negative than some of the introdutory episodes.  
-
-More unpacking... 
-
-More unpacking...
+Julia's sentiment analysis of the original text is much more positive than the LBD analysis, with two negative portions relating to Darcy proposing to Elizabeth and Lydia running away with Wickham. I had expected a similar "Wickham" negative spike, and while that section of Wickham related episodes (Ep 84 to Ep 89) is surely negative it's not more negative than some of the introductory episodes. One could argue, that most of the Lydia - Wickham story line happens off screen and in Lydia's blogs. Which could explain that lack of a clear negative spike.
 
 
-Continuing the anaylsis, I wanted to look at which words were causing the largest effect on the overall sentiment. This is easily done in Tidytext format.
+Continuing the analysis, I wanted to look at which words were causing the largest effect on the overall sentiment. 
 
 ```{r, message=FALSE}
 bing_word_counts <- lizziebennet %>%
@@ -281,13 +300,20 @@ bing_word_counts %>%
   coord_flip()
 ```
 
-Given that this is a modern adpation, it's interesting that much like the analysis done on the orginal "miss" is the top contribution to negative sentiment. In the orignal text I would assume a higher count of "Miss Bennet's" to the moderized version. However, Lizzie does talk about you she'll miss Charolte, or she misses her home... etc, so it's not too surprsing to see if have a considerable contribution here.
+Given that this is a modern adaption, it's interesting that much like the analysis done on the original "miss" is the top contribution to negative sentiment. In the original text I would assume a higher count of "Miss Bennet's" to the modernized version. However, Lizzie does talk about you she'll miss Charlotte, or she misses her home... etc, so it's not too surprising to see if have a considerable contribution here. 
 
+I did a bit of an investigation into this with bigrams. 
+```{r}
+lizziebennet %>%
+  tidytext::unnest_tokens(bigram, text, token="ngrams", n=2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(word1 == "miss") %>%
+  mutate(missAsName = ifelse(word2 %in% c("bennet", "lu"), "Yes", "No")) %>%
+  count(missAsName)
+```
+And oddly enough, the use of the word "miss" is about half and half between "I miss you" and "Miss Bennet" type phrases. Interesting! 
 
-## Back to NGrams
-
-
-
+## More with Bigrams
 ```{r, message=FALSE}
 bigrams_separated <- lizziebennet %>%
   tidytext::unnest_tokens(bigram, text, token="ngrams", n=2) %>%
@@ -300,10 +326,18 @@ bigrams_separated %>%
   ungroup() %>%
   top_n(10) 
 ```
+Not surprisingly, the common bigrams are first and last names of characters, but there's also some fun other popular bigrams with "tour leader" and "video blog." I guess *vlog* wasn't super popular to use on it's own yet?
 
-```{r, message=FALSE, warning=FALSE}
+
+
+## Network of Words
+One of my favorite part of tidytext is the example on making a bigram network. It's just so fun! 
+
+```{r, fig.height=3, fig.width=6, message=FALSE, warning=FALSE}
 library(igraph)
 library(ggraph)
+
+set.seed(42)
 
 bigrams_separated %>%
   filter(n > 5) %>%
@@ -320,7 +354,7 @@ bigrams_separated %>%
   theme(axis.text.y=element_blank())
 ```
 
-
+I leave you with this last picture.
 
 
 
