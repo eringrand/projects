@@ -1,19 +1,17 @@
 ---
 title: "Text Analysis of The Lizzie Bennet Diaries"
-output:
+output: 
   md_document:
-    fig_height: 6
-    fig_width: 7
     variant: markdown_github
-  html_notebook: null
-date: '`r Sys.Date()`'
+    fig_width: 7
+    fig_height: 6
 ---
+
+# Inspiration
+Inspired by [Julia's Silge's](http://juliasilge.com/) recent talk on [Tidytext](http://tidytextmining.com/) as part of [NASA Datanauts](https://open.nasa.gov/explore/datanauts/), and her blog posts, I decided to try my hand at some text analysis. Julia's examples focus on the works of Jane Austen. As Jane Austen has been adapted so many time, I decided to "adapt" Julia's talk for the modern works of Austen's book - specifically the Lizzie Bennet Diaries.
 
 ![](http://www.pemberleydigital.com/wp-content/uploads/2012/04/LBD-FacebookCover-Emmy.png)
 [Image source](http://www.pemberleydigital.com/)
-
-# Inspiration
-Inspired by [Julia's Silge's](http://juliasilge.com/) recent talk on [Tidytext](http://tidytextmining.com/) as part of [NASA Datanauts](link), and her blog posts, I decided to try my hand at some text analysis. Julia's examples focus on the works of Jane Austen. As Jane Austen has been adapted so many time, I decided to "adapt" Julia's talk for the modern works of Austen's book - specifically the Lizzie Bennet Diaries.
 
 
 # The Lizzie Bennet Diaries
@@ -40,7 +38,7 @@ The first part of this analysis is grabbing all the text from YouTube. To access
 library(tidyverse)
 library(tuber)
 
-yt_oauth("app_id", "app_password")
+yt_oauth(app_id, app_password)
 ```
 
 ```{r, include=FALSE}
@@ -63,6 +61,7 @@ a <- list_channel_resources(filter = c(channel_id="UCXfbQAimgtbk4RAUHtIAUww"), p
 
 # Uploaded playlists:
 playlist_id <- a$items[[1]]$contentDetails$relatedPlaylists$uploads
+playlist_id
 ```
 
 The YouTube API atomically pages videos so the max you get per page is 50. I know I need more than that, so I created a function that I can use recursively to get all the videos. (This code is not a simple way of doing what I need it to, but it works. I would love any comments on how to clean it up.)
@@ -91,6 +90,30 @@ vid_info <- getVideos(vid_info)
 
 # check that I have all 112 videos
 nrow(vid_info)
+```
+```{r}
+# pass NA as next page to get first page
+nextPageToken <- NA
+vid_info <-{}
+
+# Loop over every available page
+repeat {
+  vids <- get_playlist_items(filter = c(playlist_id=playlist_id), page_token = nextPageToken)
+  vid_ids <- map(vids$items, "contentDetails") %>%
+      map("videoId")  %>%
+      unlist()
+    
+  vid_info <- vid_info %>% bind_rows(tibble(ids = vid_ids))
+    
+  # get the token for the next page
+  nextPageToken <- ifelse(!is.null(vids$nextPageToken), vids$nextPageToken, NA)
+    
+  # if no more pages then done
+  if(is.na(nextPageToken)){
+     break
+  }
+
+}
 ```
 
 
@@ -250,7 +273,6 @@ plot_text <- bind_rows(x, y) %>%
   mutate(index2 = paste("Ep:", index),
          sentiment = ifelse(sentiment >= 0, sentiment + .0045, sentiment - .0045)
   )
-
 ```
 
 
@@ -272,13 +294,13 @@ ggplot(lbsentiment, aes(x=index, sentiment, fill=as.factor(index))) +
         theme(axis.title.x=element_blank()) +
         theme(axis.ticks.x=element_blank()) +
         theme(axis.text.x=element_blank())
-
 ```
 
 Julia's sentiment analysis of the original text is much more positive than the LBD analysis, with two negative portions relating to Darcy proposing to Elizabeth and Lydia running away with Wickham. I had expected a similar "Wickham" negative spike, and while that section of Wickham related episodes (Ep 84 to Ep 89) is surely negative it's not more negative than some of the introductory episodes. One could argue, that most of the Lydia - Wickham story line happens off screen and in Lydia's blogs. Which could explain that lack of a clear negative spike.
 
 
 Continuing the analysis, I wanted to look at which words were causing the largest effect on the overall sentiment. 
+
 
 ```{r, message=FALSE}
 bing_word_counts <- lizziebennet %>%
@@ -300,16 +322,15 @@ bing_word_counts %>%
   coord_flip()
 ```
 
-Given that this is a modern adaption, it's interesting that much like the analysis done on the original "miss" is the top contribution to negative sentiment. In the original text I would assume a higher count of "Miss Bennet's" to the modernized version. However, Lizzie does talk about you she'll miss Charlotte, or she misses her home... etc, so it's not too surprising to see if have a considerable contribution here. 
+Given that this is a modern adaption, it's interesting that much like the analysis done on the original "miss" is the top contribution to negative sentiment. In the original text I would assume a higher count of "Miss Bennet's" to the modernized version. However, Lizzie does talk about you she'll miss Charlotte, or she misses her home... etc, so it's not too surprising to see if have a considerable contribution here. I did a bit of an investigation into this with bigrams. 
 
-I did a bit of an investigation into this with bigrams. 
 ```{r}
 lizziebennet %>%
   tidytext::unnest_tokens(bigram, text, token="ngrams", n=2) %>%
   separate(bigram, c("word1", "word2"), sep = " ") %>%
-  filter(word1 == "miss") %>%
-  mutate(missAsName = ifelse(word2 %in% c("bennet", "lu"), "Yes", "No")) %>%
-  count(missAsName)
+  filter(word1 %in% "miss") %>%
+  mutate(miss_in_name = ifelse(word2 %in% c("bennet", "lu"), "Yes", "No")) %>%
+  count(miss_in_name)
 ```
 And oddly enough, the use of the word "miss" is about half and half between "I miss you" and "Miss Bennet" type phrases. Interesting! 
 
@@ -318,22 +339,22 @@ And oddly enough, the use of the word "miss" is about half and half between "I m
 bigrams_separated <- lizziebennet %>%
   tidytext::unnest_tokens(bigram, text, token="ngrams", n=2) %>%
   separate(bigram, c("word1", "word2"), sep = " ") %>%
-  filter(!word1 %in% stop_words$word) %>%
-  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% stop_words$word, 
+         !word2 %in% stop_words$word) %>%
   count(word1, word2, sort = TRUE)
 
 bigrams_separated %>% 
   ungroup() %>%
   top_n(10) 
 ```
-Not surprisingly, the common bigrams are first and last names of characters, but there's also some fun other popular bigrams with "tour leader" and "video blog." I guess *vlog* wasn't super popular to use on it's own yet?
+Not surprisingly, the common bigrams are first and last names of characters, but there's also some fun other popular bigrams with "tour leader" and "video blog." I guess *vlog* wasn't super popular to use on it's own yet.
 
 
 
 ## Network of Words
 One of my favorite part of tidytext is the example on making a bigram network. It's just so fun! 
 
-```{r, fig.height=3, fig.width=6, message=FALSE, warning=FALSE}
+```{r, fig.height=4, fig.width=8, message=FALSE, warning=FALSE}
 library(igraph)
 library(ggraph)
 
@@ -353,6 +374,10 @@ bigrams_separated %>%
   theme(axis.ticks.y=element_blank()) +
   theme(axis.text.y=element_blank())
 ```
+
+I especially enjoy the Bennet sister cluster in the left corner.
+
+
 
 I leave you with this last picture.
 
