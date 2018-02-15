@@ -1,0 +1,92 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(rtweet)
+library(magick)
+library(tidyverse)
+library(gmp)
+```
+
+```{r}
+search_terms <- c("#nasadatanauts", "#nasadatanaut", "nasadatanaut", "nasadatanauts", "#NASADatanauts", "#NASADatanaut", "NASADatanauts", "NASADatanaut", "NasaDatanauts", "NasaDatanaut")
+
+tweets <- purrr::map_df(search_terms, search_tweets, n=2000, include_rts=FALSE, parse=TRUE) 
+
+users_tweets <- lookup_users(unique(tweets$user_id))
+```
+
+
+```{r}
+search_strings <- c("nasa datanaut", "nasa datanauts", "nasadatanaut", "nasadatanauts")
+
+users_description <- purrr::map_df(search_strings, search_users, n = 1000, parse = TRUE)
+```
+
+
+```{r}
+users <- bind_rows(users_tweets, users_description)
+
+users <- users %>%
+  select(user_id, 
+         profile_image_url, 
+         screen_name,
+         name, 
+         followers_count, 
+         profile_image_url
+         ) %>%
+  distinct()
+```
+
+
+
+```{r}
+save_image <- function(df){
+  image <- try(image_read(df$profile_image_url), silent = FALSE)
+  if(class(image)[1] != "try-error"){
+    image %>%
+      image_scale("50x50") %>%
+      image_write(paste0("~/GitHub/projects/Datanauts pictures/pictures/", df$screen_name,".jpg"))
+  }
+  
+}
+
+users <- filter(users, !is.na(profile_image_url))
+users_list <- split(users, 1:nrow(users))
+walk(users_list, save_image)
+```
+
+
+
+```{r}
+files <- dir("~/GitHub/projects/Datanauts pictures/pictures/", full.names = TRUE)
+set.seed(42)
+files <- sample(files, length(files))
+gmp::factorize(length(files))
+```
+
+
+```{r}
+no_rows <- 3
+no_cols <- 19
+
+make_column <- function(i, files, no_rows){
+  image_read(files[(i*no_rows+1):((i+1)*no_rows)]) %>%
+  image_append(stack = TRUE) %>%
+    image_write(paste0("~/GitHub/projects/Datanauts pictures/cols/", i, ".jpg"))
+}
+
+walk(0:(no_cols-1), make_column, files = files, no_rows = no_rows)
+
+
+image_read(dir("~/GitHub/projects/Datanauts pictures/cols/", full.names = TRUE)) %>%
+image_append(stack = FALSE) %>%
+  image_write("2018-02-7-facesofnasadatanauts.jpg")
+```
+
+
+
+
+

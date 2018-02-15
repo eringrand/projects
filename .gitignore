@@ -1,0 +1,5 @@
+.httr-oauth
+*/*/*.jpg
+*/*.nb.html
+*/*.Rproj*
+*/.Rhistory

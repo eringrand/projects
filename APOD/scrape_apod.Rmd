@@ -1,0 +1,105 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(rvest)
+library(tidyverse)
+library(tidytext)
+##scrape the landing page
+apod <- read_html("https://apod.nasa.gov/apod/archivepix.html")
+
+##scrap all URLs
+url <- html_nodes(apod, "a") %>% 
+  map_chr(xml_attrs) %>%
+  tibble(url = .) %>%
+  filter(str_detect(url, "ap"), !str_detect(url, "/"))
+
+url
+```
+
+```{r}
+my_read_html <- function(url, ...) {
+  xml2::read_html(url, ...)
+}
+
+data_raw <- url[1:1000, ] %>% # first 1000 links
+  mutate(full_url = paste0("https://apod.nasa.gov/apod/", url)) %>%
+  mutate(page = map(full_url, my_read_html),
+         pic = map_chr(page, ~html_node(.x, xpath = "//*/img") %>% html_attr("src")),
+         title = map_chr(page, ~html_nodes(.x, "title") %>% html_text()),
+         description = map_chr(page, ~html_nodes(.x, "p") %>% html_text() %>% .[str_detect(., "Ex")])
+  )
+```
+
+
+
+
+
+```{r}
+data <- data_raw %>% 
+  mutate(description = str_replace_all(description, "\n", " "),
+         description = str_replace_all(description, "Explanation:", ""),
+         title = str_replace_all(title, "\n", " "),
+         title = str_replace_all(title, "APOD:", ""),
+         title = if_else(str_detect(title, "2017 November 22"), "2017 November 22 - Oumuamua Interstellar Asteroid", title)
+         ) %>%
+  mutate_all(trimws) %>%
+  separate(title, into = c("date", "title"), sep = " - ")
+
+data %>%
+  select(-date) %>%
+  distinct() %>%
+  unnest_tokens(word, description) %>%
+  anti_join(stop_words) %>%
+  count(title, word) %>%
+  bind_tf_idf(word, title, n) %>%
+  arrange(desc(tf_idf))
+```
+
+image collage
+```{r}
+library(magick)
+library(gmp)
+
+save_image <- function(pic, title){
+  image <- try(image_read(paste0("https://apod.nasa.gov/apod/", pic)), silent = FALSE)
+  image_loc <- paste0("~/GitHub/projects/apod/pictures/", str_sub(pic, 12, -1))
+  if(class(image)[1] != "try-error"){
+  image %>%
+    image_scale("100x100") %>%
+    image_write(image_loc)
+  }
+  return(image)
+}
+
+images <- map(data$pic, save_image)
+```
+
+
+```{r}
+files <- dir("~/GitHub/projects/apod/pictures/", full.names = TRUE)
+set.seed(42)
+files <- sample(files, length(files))
+gmp::factorize(length(files))
+```
+
+```{r}
+no_rows <- 23
+no_cols <- 2*2*2*5
+
+make_column <- function(i, files, no_rows){
+  image_read(files[(i*no_rows+1):((i+1)*no_rows)]) %>%
+  image_append(stack = TRUE) %>%
+    image_write(paste0("~/GitHub/projects/apod/pictures/cols/", i, ".jpg"))
+}
+
+walk(0:(no_cols-1), make_column, files = files, no_rows = no_rows)
+
+
+image_read(dir("~/GitHub/projects/apod/pictures/cols/", full.names = TRUE)) %>%
+  image_append(stack = FALSE) %>%
+  image_write("~/GitHub/projects/apod/2018-02-7-apod.jpg")
+```
+
