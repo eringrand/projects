@@ -4,3 +4,7 @@
 */*.nb.html
 */*.Rproj*
 */.Rhistory
+*.Rproj
+.Rproj.user/*
+.Rhistory
+.Rdata
